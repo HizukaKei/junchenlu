@@ -1,0 +1,756 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>君臣录 · 嘉靖朝政模拟</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  background: #1a1410;
+  color: #d4c5a9;
+  font-family: 'Noto Serif SC', '华文楷体', 'KaiTi', serif;
+  min-height: 100vh;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 20px;
+}
+
+#game-container {
+  max-width: 820px;
+  width: 100%;
+  background: #2a221c;
+  border: 2px solid #6b5a4a;
+  border-radius: 24px;
+  padding: 28px 24px 32px;
+  box-shadow: 0 20px 40px rgba(0,0,0,0.7);
+  position: relative;
+}
+
+#stats-bar {
+  display: flex;
+  justify-content: space-between;
+  background: #1f1813;
+  padding: 12px 16px;
+  border-radius: 40px;
+  border: 1px solid #5a4a3a;
+  margin-bottom: 24px;
+  font-size: 14px;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+}
+
+.stat-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: #2d241e;
+  padding: 3px 12px 3px 8px;
+  border-radius: 30px;
+  border: 1px solid #4d3e30;
+}
+
+.stat-label { color: #b0977a; letter-spacing: 1px; }
+
+.stat-value { color: #f0e0c0; font-weight: bold; min-width: 22px; text-align: center; }
+
+.stat-item.danger { border-color: #a04040; animation: dangerPulse 2s infinite; }
+.stat-item.tribute-glow { border-color: #c8983a; }
+
+@keyframes dangerPulse {
+  0%, 100% { box-shadow: 0 0 0px rgba(200,60,60,0); }
+  50% { box-shadow: 0 0 8px rgba(200,60,60,0.5); }
+}
+
+#investigation-bar {
+  display: none;
+  background: #2a1010;
+  border: 1px solid #a04040;
+  border-radius: 30px;
+  padding: 8px 18px;
+  margin-bottom: 16px;
+  text-align: center;
+  font-size: 14px;
+  color: #e07070;
+  letter-spacing: 1px;
+  animation: dangerPulse 2s infinite;
+}
+#investigation-bar.visible { display: block; }
+
+#round-display {
+  text-align: center;
+  font-size: 18px;
+  letter-spacing: 4px;
+  color: #b8a48a;
+  border-bottom: 1px solid #4d3e30;
+  padding-bottom: 10px;
+  margin-bottom: 18px;
+}
+
+#main-text {
+  background: #1f1813;
+  border-radius: 18px;
+  padding: 20px 22px;
+  min-height: 100px;
+  line-height: 1.7;
+  font-size: 17px;
+  border: 1px solid #4d3e30;
+  margin-bottom: 18px;
+  white-space: pre-wrap;
+  color: #e6d7c0;
+}
+
+#floating-screen {
+  background: #0f0b08;
+  border-left: 6px solid #b58d5a;
+  padding: 14px 20px;
+  border-radius: 12px;
+  margin-bottom: 20px;
+  font-style: italic;
+  color: #dac29e;
+  font-size: 16px;
+  min-height: 60px;
+  box-shadow: inset 0 0 18px rgba(0,0,0,0.6);
+  border: 1px solid #5a4a3a;
+}
+#floating-screen::before {
+  content: "▌ 嘉靖 · ";
+  color: #b58d5a;
+  font-style: normal;
+  font-weight: bold;
+}
+
+#options-area { display: flex; flex-direction: column; gap: 12px; margin-top: 8px; }
+
+.option-btn {
+  background: #2d241e;
+  border: 1px solid #5a4a3a;
+  color: #d4c5a9;
+  padding: 14px 20px;
+  border-radius: 40px;
+  font-size: 16px;
+  text-align: left;
+  cursor: pointer;
+  transition: all 0.15s;
+  font-family: inherit;
+  letter-spacing: 0.5px;
+  line-height: 1.4;
+}
+.option-btn:hover:not(:disabled) { background: #3d322a; border-color: #b58d5a; color: #f5e8d0; transform: scale(1.01); }
+.option-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.hidden-flag { border-left: 4px solid #b58d5a; background: #2a1f18; }
+.hidden-flag::after { content: " [密]"; color: #b58d5a; font-size: 14px; }
+
+.suspect-down { border-left: 4px solid #5a8a5a; }
+.suspect-down::after { content: " [消疑]"; color: #6aaa6a; font-size: 13px; }
+
+/* ===== 弹窗 ===== */
+#event-overlay {
+  position: fixed;
+  top: 0; left: 0;
+  width: 100%; height: 100%;
+  background: rgba(0,0,0,0.78);
+  z-index: 1000;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  animation: fadeIn 0.3s ease;
+}
+@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+@keyframes slideUp { from { transform: translateY(30px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+
+#event-popup {
+  background: #2a221c;
+  border: 2px solid #6b5a4a;
+  border-radius: 20px;
+  padding: 28px 24px 24px;
+  max-width: 520px;
+  width: 92%;
+  box-shadow: 0 20px 50px rgba(0,0,0,0.8);
+  animation: slideUp 0.35s ease;
+  position: relative;
+}
+#event-popup.guard-event { border-color: #8b3a3a; box-shadow: 0 0 30px rgba(180,40,40,0.3), 0 20px 50px rgba(0,0,0,0.7); }
+#event-popup.eunuch-event { border-color: #6b5a8a; box-shadow: 0 0 30px rgba(100,60,160,0.3), 0 20px 50px rgba(0,0,0,0.7); }
+#event-popup.investigate-event { border-color: #a04040; box-shadow: 0 0 30px rgba(200,40,40,0.5), 0 20px 50px rgba(0,0,0,0.7); background: #1f1414; }
+#event-popup.relation-event { border-color: #b58d5a; box-shadow: 0 0 30px rgba(180,140,80,0.4), 0 20px 50px rgba(0,0,0,0.7); }
+#event-popup.embezzle-event { border-color: #c8983a; box-shadow: 0 0 30px rgba(200,150,50,0.45), 0 20px 50px rgba(0,0,0,0.7); background: #1f1810; }
+#event-popup.tribute-event { border-color: #c8983a; box-shadow: 0 0 30px rgba(200,150,50,0.5), 0 20px 50px rgba(0,0,0,0.7); background: #1a1810; }
+
+#event-icon { text-align: center; font-size: 48px; margin-bottom: 10px; }
+#event-title { text-align: center; font-size: 20px; font-weight: bold; letter-spacing: 2px; margin-bottom: 14px; padding-bottom: 12px; border-bottom: 1px solid #4d3e30; }
+.guard-event #event-title { color: #e07070; }
+.eunuch-event #event-title { color: #b89ae0; }
+.investigate-event #event-title { color: #e04040; }
+.relation-event #event-title { color: #dac29e; }
+.embezzle-event #event-title { color: #d4a840; }
+.tribute-event #event-title { color: #d4a840; }
+
+#event-desc {
+  background: #1f1813;
+  border-radius: 14px;
+  padding: 16px 18px;
+  line-height: 1.75;
+  font-size: 16px;
+  color: #e6d7c0;
+  margin-bottom: 20px;
+  border: 1px solid #4d3e30;
+  min-height: 60px;
+}
+.investigate-event #event-desc { background: #1a1010; border-color: #5a3030; color: #e0c0c0; }
+.relation-event #event-desc { background: #1f1813; border-color: #5a4a3a; }
+.embezzle-event #event-desc { background: #1f1810; border-color: #5a4a20; color: #e8d8b0; }
+.tribute-event #event-desc { background: #1a1810; border-color: #5a4a20; color: #e8d8b0; }
+
+#event-choices { display: flex; flex-direction: column; gap: 10px; }
+
+.event-choice-btn {
+  padding: 13px 20px;
+  border-radius: 40px;
+  font-size: 16px;
+  text-align: left;
+  cursor: pointer;
+  transition: all 0.15s;
+  font-family: inherit;
+  letter-spacing: 0.5px;
+  line-height: 1.4;
+  background: #2d241e;
+  border: 1px solid #5a4a3a;
+  color: #d4c5a9;
+}
+.event-choice-btn:hover { transform: scale(1.02); }
+.event-choice-btn.choice-help { border-left: 4px solid #c07040; }
+.event-choice-btn.choice-help:hover { background: #3d2a1f; border-color: #c07040; color: #f5d8c0; }
+.event-choice-btn.choice-pass { border-left: 4px solid #5a5a5a; }
+.event-choice-btn.choice-pass:hover { background: #2a2a24; border-color: #7a7a7a; color: #c0c0b0; }
+
+.embezzle-event .event-choice-btn.choice-help { border-left: 4px solid #d4a840; }
+.embezzle-event .event-choice-btn.choice-help:hover { border-color: #d4a840; background: #3d2a10; color: #f5d8a0; }
+.embezzle-event .event-choice-btn.choice-pass { border-left: 4px solid #5a8a5a; }
+.embezzle-event .event-choice-btn.choice-pass:hover { border-color: #5a8a5a; background: #1a2a1a; color: #b0d8b0; }
+
+.guard-event .event-choice-btn.choice-help:hover { border-color: #d05050; background: #3d1f1f; color: #f5c0c0; }
+.eunuch-event .event-choice-btn.choice-help:hover { border-color: #a080d0; background: #2d223d; color: #d8c8f0; }
+.investigate-event .event-choice-btn.choice-help:hover { border-color: #d05050; background: #3d1515; color: #f5c0c0; }
+
+#event-effect-hint { text-align: center; font-size: 13px; color: #6b5a4a; margin-top: 14px; font-style: italic; letter-spacing: 0.5px; }
+
+#event-close-btn {
+  display: block; margin: 16px auto 0;
+  background: #3d322a;
+  border: 1px solid #5a4a3a;
+  color: #d4c5a9;
+  padding: 12px 40px;
+  border-radius: 40px;
+  font-size: 17px;
+  cursor: pointer;
+  transition: all 0.15s;
+  font-family: inherit;
+  letter-spacing: 2px;
+}
+#event-close-btn:hover { background: #4d3e32; border-color: #b58d5a; color: #f5e8d0; transform: scale(1.03); }
+
+#debug-note { margin-top: 18px; font-size: 12px; color: #5a4a3a; text-align: center; border-top: 1px solid #3d322a; padding-top: 14px; }
+
+@media (max-width: 500px) {
+  #game-container { padding: 16px; }
+  .stat-item { font-size: 11px; padding: 2px 8px; }
+  #main-text { font-size: 15px; padding: 14px; }
+  #event-popup { padding: 20px 16px 18px; }
+  #event-desc { font-size: 14px; padding: 12px 14px; }
+}
+</style>
+</head>
+<body>
+
+<div id="game-container">
+  <div id="stats-bar">
+    <span class="stat-item" id="trust-item"><span class="stat-label">信任</span><span class="stat-value" id="trust-val">10</span></span>
+    <span class="stat-item" id="suspect-item"><span class="stat-label">猜忌</span><span class="stat-value" id="suspect-val">5</span></span>
+    <span class="stat-item"><span class="stat-label">权力</span><span class="stat-value" id="power-val">5</span></span>
+    <span class="stat-item"><span class="stat-label">党羽</span><span class="stat-value" id="faction-val">10</span></span>
+    <span class="stat-item"><span class="stat-label">内帑</span><span class="stat-value" id="treasury-val">0</span></span>
+    <span class="stat-item"><span class="stat-label">私财</span><span class="stat-value" id="private-wealth-val">1000</span></span>
+    <span class="stat-item" id="tribute-item"><span class="stat-label">贡奉</span><span class="stat-value" id="tribute-val">0</span></span>
+    <span class="stat-item"><span class="stat-label">锦衣卫</span><span class="stat-value" id="guard-val">30</span></span>
+    <span class="stat-item"><span class="stat-label">内侍</span><span class="stat-value" id="eunuch-val">30</span></span>
+  </div>
+  <div id="investigation-bar">⚠ 你察觉到有人在暗中调查你的底细……行事须万分谨慎</div>
+  <div id="round-display">第 <span id="round-num">1</span> 回合</div>
+  <div id="main-text">你通过会试后，被引至西苑平台召对。帘后坐着当今皇帝，你跪在蒲团上，不敢抬头。</div>
+  <div id="floating-screen">朕看过你的卷子，有些意思。朕问你——朕修道，外间议论颇多，你如何看？</div>
+  <div id="options-area"></div>
+  <div id="debug-note">· 嘉靖 · 孤臣路 · 二十回合</div>
+</div>
+
+<script>
+(function(){
+  const state = {
+    round: 1, trust: 10, suspect: 5, power: 5, faction: 10,
+    treasury: 0, privateWealth: 1000, totalTribute: 0, tributeTriggered: {},
+    eunuchFavor: 30, guardFavor: 30, oldFavor: 25, newFavor: 25,
+    countA: 0, countB: 0, countC: 0, countHidden: 0,
+    triggeredReform: false, gameOver: false, recentEvents: [],
+    underInvestigation: false, investigationRound: 0, relationEventsFired: {}
+  };
+
+  const tributeThresholds = [
+    { amount: 500, suspectDown: 2, title: '薄有贡奉', icon: '🎗️', desc: '嘉靖收到你献上的祥瑞之物，虽非稀世珍宝，但心意难得。他在批阅你的奏折时，笔锋明显柔和了几分。内侍传出话来：「陛下说，此人倒是有心。」' },
+    { amount: 1000, suspectDown: 3, title: '贡奉渐丰', icon: '🏅', desc: '你多次向宫中进献，嘉靖开始把你视作"懂事"的臣子。某日散朝后，他对身边的秉笔太监说了句——「这个人，还算知道体恤朕。」猜忌之心，有所消减。' },
+    { amount: 2000, suspectDown: 5, title: '慷慨贡奉', icon: '💎', desc: '你的贡奉已经让嘉靖对你另眼相看。西苑传出话来——陛下近来翻阅你的奏折时，不再皱眉，偶有颔首。朝中有人私下议论：「看来陛下是真把他当自己人了。」' },
+    { amount: 3000, suspectDown: 8, title: '倾囊以献', icon: '👑', desc: '你几乎倾尽所有贡奉宫中。嘉靖素来多疑，但面对如此厚礼，也不得不承认你的忠心。他在一份密折上批道：「此人虽有小过，忠心可鉴。」猜忌大减，你的地位更加稳固。' }
+  ];
+
+  const roundEl = document.getElementById('round-num');
+  const mainText = document.getElementById('main-text');
+  const floatScreen = document.getElementById('floating-screen');
+  const optionsArea = document.getElementById('options-area');
+  const trustVal = document.getElementById('trust-val');
+  const suspectVal = document.getElementById('suspect-val');
+  const powerVal = document.getElementById('power-val');
+  const factionVal = document.getElementById('faction-val');
+  const treasuryVal = document.getElementById('treasury-val');
+  const privateWealthVal = document.getElementById('private-wealth-val');
+  const tributeVal = document.getElementById('tribute-val');
+  const guardVal = document.getElementById('guard-val');
+  const eunuchVal = document.getElementById('eunuch-val');
+  const trustItem = document.getElementById('trust-item');
+  const suspectItem = document.getElementById('suspect-item');
+  const tributeItem = document.getElementById('tribute-item');
+  const investigationBar = document.getElementById('investigation-bar');
+
+  function updateStats() {
+    trustVal.textContent = state.trust;
+    suspectVal.textContent = state.suspect;
+    powerVal.textContent = state.power;
+    factionVal.textContent = state.faction;
+    treasuryVal.textContent = state.treasury;
+    privateWealthVal.textContent = state.privateWealth;
+    tributeVal.textContent = state.totalTribute;
+    guardVal.textContent = state.guardFavor;
+    eunuchVal.textContent = state.eunuchFavor;
+    if (state.suspect >= 60) suspectItem.classList.add('danger'); else suspectItem.classList.remove('danger');
+    if (state.trust < 30) trustItem.classList.add('danger'); else trustItem.classList.remove('danger');
+    if (state.totalTribute >= 1000) tributeItem.classList.add('tribute-glow'); else tributeItem.classList.remove('tribute-glow');
+    if (state.underInvestigation) investigationBar.classList.add('visible'); else investigationBar.classList.remove('visible');
+  }
+
+  function clampStats() {
+    state.trust = Math.max(0, Math.min(100, state.trust));
+    state.suspect = Math.max(0, Math.min(100, state.suspect));
+    state.power = Math.max(0, Math.min(100, state.power));
+    state.faction = Math.max(0, Math.min(100, state.faction));
+    state.treasury = Math.max(0, state.treasury);
+    state.privateWealth = Math.max(0, state.privateWealth);
+    state.totalTribute = Math.max(0, state.totalTribute);
+    state.eunuchFavor = Math.max(0, Math.min(100, state.eunuchFavor));
+    state.guardFavor = Math.max(0, Math.min(100, state.guardFavor));
+  }
+
+  function checkInvestigation() {
+    if (!state.underInvestigation && state.suspect >= 60) { state.underInvestigation = true; state.investigationRound = state.round; return true; }
+    return false;
+  }
+
+  function getTrustSuspectRelation() {
+    const diff = Math.abs(state.trust - state.suspect);
+    if (state.trust >= 65 && state.suspect >= 65) return 'dualHigh';
+    if (state.trust >= 70 && state.suspect <= 30) return 'trustHigh';
+    if (state.trust <= 30 && state.suspect >= 70) return 'suspectHigh';
+    if (diff <= 10 && state.trust >= 35 && state.suspect >= 35) return 'balanced';
+    return null;
+  }
+
+  function checkTributeThresholds() {
+    const newlyTriggered = [];
+    for (const t of tributeThresholds) {
+      if (state.totalTribute >= t.amount && !state.tributeTriggered[t.amount]) {
+        state.tributeTriggered[t.amount] = true;
+        state.suspect -= t.suspectDown;
+        newlyTriggered.push(t);
+      }
+    }
+    clampStats();
+    return newlyTriggered;
+  }
+
+  function showPopup(className, icon, title, desc, closeLabel, extraHTML, onBeforeClose) {
+    return new Promise((resolve) => {
+      const overlay = document.createElement('div'); overlay.id = 'event-overlay';
+      const popup = document.createElement('div'); popup.id = 'event-popup'; popup.className = className;
+      popup.innerHTML = `<div id="event-icon">${icon}</div><div id="event-title">${title}</div><div id="event-desc">${desc}</div>${extraHTML || ''}<div id="event-close-btn">${closeLabel}</div>`;
+      overlay.appendChild(popup);
+      document.body.appendChild(overlay);
+      popup.querySelector('#event-close-btn').onclick = () => {
+        if (onBeforeClose) onBeforeClose();
+        overlay.style.opacity = '0'; overlay.style.transition = 'opacity 0.2s';
+        setTimeout(() => { overlay.remove(); resolve(); }, 200);
+      };
+      popup.addEventListener('click', (e) => e.stopPropagation());
+    });
+  }
+
+  function showTributePopup(triggeredList) {
+    if (triggeredList.length === 0) return Promise.resolve();
+    const t = triggeredList[triggeredList.length - 1];
+    return showPopup('tribute-event', t.icon, t.title, t.desc, '领旨谢恩', `<div id="event-effect-hint">— 猜忌 ${t.suspectDown}，累计贡奉 ${state.totalTribute} —</div>`);
+  }
+
+  function showInvestigationPopup() {
+    return showPopup('investigate-event', '🕵️', '暗中调查', '你注意到，近日有人在不动声色地打听你的底细。朝中一位与你相熟的老吏悄悄告诉你——有御史受人之托，正在搜集你的一切往来书信和账目。你的每一个举动，都可能被放大审视。在这暗流涌动之际，你必须更加谨慎地平衡圣意与自保。从今往后，你的猜忌值将更难降低，但并非全无办法……', '我明白了');
+  }
+
+  function showRelationEvent(relationType) {
+    state.relationEventsFired[relationType] = true;
+    const map = {
+      dualHigh: ['⚖️', '帝心难测', '嘉靖对你既信且疑。他欣赏你的才干，但又害怕你羽翼渐丰。某日召对，他看着你说了句意味深长的话：「朕用你，是因为你能办事。但你要记住——朕既能用你，也能不用你。」这句话让你彻夜难眠。你明白，在信任与猜忌的双重压力下，你的每一步都如同行走在刀刃之上。', '谨记在心'],
+      trustHigh: ['🌟', '圣眷正隆', '嘉靖近来对你愈发信任。朝会上他多次当众赞你，甚至在你与大臣争执时公然站在你这边。西苑的内侍私下告诉你：「陛下最近常念叨大人，说满朝文武，只有大人最懂他的心思。」但你也清楚——圣眷越隆，嫉恨你的人就越多。高处不胜寒，你需更加小心才是。', '叩谢圣恩'],
+      suspectHigh: ['🌪️', '危如累卵', '你感到四周的目光越来越冷。嘉靖已经很久没有单独召见你了，你的奏折常常石沉大海。一位老内侍私下告诉你：「陛下这几日翻来覆去地看御史弹劾大人的折子，眉头就没松开过。」你知道，若再不设法挽回圣心，大祸随时可能降临。信任值已经很低，你必须尽快找到破局之法。', '我知道了'],
+      balanced: ['🪨', '微妙的平衡', '眼下你在嘉靖心中的分量，恰如天平上的一枚砝码——不好不坏，不重不轻。他不特别信任你，也不特别猜忌你。这是一个微妙的平衡点。你可以选择继续求稳，也可以试图冒险一搏。但无论选择哪条路，接下来的几个回合，将决定你在朝堂上的最终位置。', '继续前行']
+    };
+    const [icon, title, desc, btn] = map[relationType] || [];
+    if (!icon) return Promise.resolve();
+    return showPopup('relation-event', icon, title, desc, btn);
+  }
+
+  function showDangerWarning() {
+    return showPopup('investigate-event', '⚠️', '圣心渐远', '你感到嘉靖看你的眼神越来越冷。早朝上，他开始当众驳回你的奏议；散朝后，也不再单独留你说话。有人告诉你，锦衣卫那边关于你的密报已经堆了厚厚一摞。你必须尽快想办法挽回圣心——否则，留给你的时间不多了。', '我知道了');
+  }
+
+  function applyEventEffects(choice) {
+    if (choice.trust !== undefined) state.trust += choice.trust;
+    if (choice.suspect !== undefined) state.suspect += choice.suspect;
+    if (choice.power !== undefined) state.power += choice.power;
+    if (choice.treasury !== undefined) state.treasury += choice.treasury;
+    if (choice.privateWealth !== undefined) state.privateWealth += choice.privateWealth;
+    if (choice.faction !== undefined) state.faction += choice.faction;
+    clampStats();
+  }
+
+  // ===== 贪墨事件 =====
+  const embezzleEvents = [
+    { id: 'embezzle_01', title: '工程回扣', icon: '🏗️', desc: '负责宫室修缮的工头私下找到你，递上一份账目。他低声说，石料和木料的报价比市价高出三成——多出来的部分，可以分你一半。他拍着胸脯保证：「大人放心，账面上的事，小的已经打点好了，绝不会有人查出端倪。」', minRound: 2, maxRound: 16 },
+    { id: 'embezzle_02', title: '盐引私售', icon: '🧂', desc: '一位徽州盐商辗转托人求见，落座后开门见山：他手头有一批积压的盐引，若以你的名义批转出去，每引可多得五分银。他无需你出面，只需你点头默许，事成之后自有人将银子送到府上。他说：「大人主管采买，盐引一道本也沾边，旁人不会起疑。」', minRound: 3, maxRound: 17 },
+    { id: 'embezzle_03', title: '田产投献', icon: '🌾', desc: '一位致仕的老员外托人递话：他在京郊有良田三百亩，想挂在你名下。如此可免去赋税，每年收成与你三七分成。来人说：「大人是天子近臣，地方官吏断不敢查您的田产。这对双方都有好处，何乐而不为？」', minRound: 2, maxRound: 16 },
+    { id: 'embezzle_04', title: '贡品截留', icon: '🎁', desc: '宫中采买的一批西域玉石到京，你在查验时发现，实际数量比账册上多了两箱。押运的商人悄悄对你说，这两箱是「溢余」——不入账册，无迹可寻。若你睁一只眼闭一只眼，这两箱玉石便是你的。他还说，之前几位经手的大人，都是这样做的。', minRound: 3, maxRound: 17 },
+    { id: 'embezzle_05', title: '科场关节', icon: '📝', desc: '会试在即，一位江南富商深夜登门，带着一箱银锭。他的儿子连考三次不中，此次想请你帮忙——不必泄露考题，只需在阅卷时「略加留意」，让文章能入考官的法眼。他跪下叩头：「大人若能成全，犬子一生不忘大恩。此外，另有一份薄礼，事成之后自当奉上。」', minRound: 4, maxRound: 16 }
+  ];
+
+  function showEmbezzleEvent(eventData) {
+    return new Promise((resolve) => {
+      state.recentEvents.push(eventData.id); if (state.recentEvents.length > 8) state.recentEvents.shift();
+      const wealthGain = [700,800,900,1000][Math.floor(Math.random()*4)];
+      const factionGain = Math.floor(Math.random()*4)+5;
+      const suspectLoss = Math.floor(Math.random()*6)+5;
+      const overlay = document.createElement('div'); overlay.id = 'event-overlay';
+      const popup = document.createElement('div'); popup.id = 'event-popup'; popup.className = 'embezzle-event';
+      popup.innerHTML = `<div id="event-icon">${eventData.icon}</div><div id="event-title">${eventData.title}</div><div id="event-desc">${eventData.desc}</div><div id="event-choices"><button class="event-choice-btn choice-help" data-choice="0">🤝 收下这笔好处，纳入私囊</button><button class="event-choice-btn choice-pass" data-choice="1">🚫 拒绝诱惑，分文不取</button></div><div id="event-effect-hint">— 此事件不影响当前回合选项 —</div>`;
+      overlay.appendChild(popup); document.body.appendChild(overlay);
+      popup.querySelectorAll('.event-choice-btn').forEach(btn => {
+        btn.onclick = () => {
+          if (parseInt(btn.getAttribute('data-choice')) === 0) { state.privateWealth += wealthGain; state.faction += factionGain; }
+          else { state.faction -= 3; state.suspect -= suspectLoss; }
+          clampStats(); popup.querySelectorAll('.event-choice-btn').forEach(b=>b.disabled=true);
+          updateStats(); overlay.style.opacity='0'; overlay.style.transition='opacity 0.25s';
+          setTimeout(()=>{overlay.remove();resolve();},250);
+        };
+      });
+      popup.addEventListener('click', e=>e.stopPropagation());
+    });
+  }
+
+  function getAvailableEmbezzleEvents() {
+    return embezzleEvents.filter(ev => state.round >= ev.minRound && state.round <= ev.maxRound && !state.recentEvents.includes(ev.id));
+  }
+
+  // ===== 锦衣卫/内侍事件 =====
+  const randomEvents = [
+    { id:'guard_01',type:'guard',title:'深夜来客',icon:'🏮',desc:'深夜，你府上来了一位不速之客——锦衣卫的一位百户。他穿着便服，自称"路过"，落座后开门见山：他正在追查一桩贪墨案，线索断了，想请你帮忙查一查某个商人的账目。他说：「大人掌着宫里的采买差事，查这个应该不难。」',choices:[{label:'答应帮忙，调出账目给他',effectDesc:'锦衣卫好感+8，猜忌+3',favor:8,trust:0,suspect:3,power:1},{label:'婉拒，说不方便插手锦衣卫的事',effectDesc:'无变化',favor:0,trust:0,suspect:0,power:0}],minRound:2,maxRound:16},
+    { id:'guard_02',type:'guard',title:'街头偶遇',icon:'⚔️',desc:'你在东安门外偶遇锦衣卫办案。一名小旗正在追查一桩私盐案，线索刚好牵扯到你认识的一个商人。那小旗认得你，拱手道：「大人，此人跟您有些往来？卑职不敢冒犯，但若大人知道些什么，还望指点一二。」',choices:[{label:'如实相告，提供关键线索',effectDesc:'锦衣卫好感+5，猜忌+2',favor:5,trust:0,suspect:2,power:1},{label:'装作不知，说不清楚此人的事',effectDesc:'无变化',favor:0,trust:0,suspect:0,power:0}],minRound:3,maxRound:17},
+    { id:'guard_03',type:'guard',title:'北镇抚司密函',icon:'📜',desc:'一封印着火漆的密函送到你府上，落款是北镇抚司。信中大意是：最近有人在陛下面前频繁提到你的名字，锦衣卫那边有些消息想告诉你——但作为交换，他们也希望你在朝中帮他们「说几句话」。',choices:[{label:'收下密信，答应互通消息',effectDesc:'锦衣卫好感+6，猜忌+3，权力+2',favor:6,trust:0,suspect:3,power:2},{label:'将密信原封退回，不趟浑水',effectDesc:'信任+2',favor:0,trust:2,suspect:0,power:0}],minRound:4,maxRound:17},
+    { id:'guard_04',type:'guard',title:'雪中送炭',icon:'🔥',desc:'你的一位旧交因卷入文字狱被锦衣卫带走，其家人连夜登门哭求。你知道此人确实冤枉——他只是收藏了几本禁书，并无反意。但若出手相救，势必要欠锦衣卫一个人情。',choices:[{label:'托人递话，尽力营救',effectDesc:'锦衣卫好感+10，猜忌+5，信任-2',favor:10,trust:-2,suspect:5,power:0},{label:'明哲保身，婉拒其家人',effectDesc:'信任+3',favor:0,trust:3,suspect:0,power:0}],minRound:5,maxRound:15},
+    { id:'guard_05',type:'guard',title:'茶馆密会',icon:'🍵',desc:'一位锦衣卫总旗约你在城外茶馆见面。他开门见山：最近宫里有人频繁出入某位大臣的府邸，那人恰好是你朝中的对头。他问你是否需要「帮忙留意」——当然，这忙不是白帮的。',choices:[{label:'答应合作，给他行个方便',effectDesc:'锦衣卫好感+7，猜忌+4，权力+2',favor:7,trust:-1,suspect:4,power:2},{label:'婉拒，说采买之事不敢徇私',effectDesc:'信任+1',favor:0,trust:1,suspect:0,power:0}],minRound:2,maxRound:16},
+    { id:'guard_06',type:'guard',title:'诏狱探视',icon:'🔗',desc:'一位旧日在翰林院的同僚因言获罪，被关进了诏狱。他托狱卒带出一张字条，求你去看他一眼。诏狱是锦衣卫的地盘，外人进去需要打点——传出去，旁人难免觉得你与犯官有牵连。',choices:[{label:'冒险探视，打点狱卒',effectDesc:'锦衣卫好感+8，猜忌+6，私财-200',favor:8,trust:-2,suspect:6,power:1,privateWealth:-200},{label:'心中不忍，但最终没去',effectDesc:'无变化',favor:0,trust:0,suspect:0,power:0}],minRound:5,maxRound:16},
+    { id:'guard_07',type:'guard',title:'深夜尾随',icon:'👁️',desc:'你连续三夜发现府邸外有人影晃动。第四夜，一个锦衣卫校尉主动敲了你的门，说已帮你查清楚了——是某个御史雇的人，在搜集你的把柄。那人问：「大人要我们怎么做？赶走，还是……给点颜色瞧瞧？」',choices:[{label:'请他帮忙警告对方',effectDesc:'锦衣卫好感+9，猜忌+5，权力+3',favor:9,trust:-1,suspect:5,power:3},{label:'多谢好意，自己处理',effectDesc:'信任+1',favor:0,trust:1,suspect:0,power:0}],minRound:4,maxRound:16},
+    { id:'guard_08',type:'guard',title:'密档交易',icon:'📦',desc:'锦衣卫的一名经历官私下找到你，说他手头有一份绝密档案，记录了朝中几位大臣私下的往来——其中包括你最大的政敌。他愿意给你看一眼，条件是：下次廷推时，支持他举荐的人选。',choices:[{label:'同意交易，换取密档',effectDesc:'锦衣卫好感+11，猜忌+8，权力+5',favor:11,trust:-3,suspect:8,power:5},{label:'拒绝，不与锦衣卫做交易',effectDesc:'信任+3',favor:0,trust:3,suspect:0,power:0}],minRound:6,maxRound:17},
+    { id:'eunuch_01',type:'eunuch',title:'西苑传话',icon:'🪭',desc:'西苑值房的一位内侍在散朝后悄悄跟上来，低声说：「陛下今日心情颇佳，看了几份折子，还夸了一句"此人办事还算稳妥"。虽未指名道姓，但咱家想着，应该说的就是大人您。」说完他搓了搓手指，显然在等赏。',choices:[{label:'赏他一锭银子，多谢传话',effectDesc:'内侍好感+5，私财-100',favor:5,trust:0,suspect:0,power:0,privateWealth:-100},{label:'点点头，但不给赏钱',effectDesc:'无变化',favor:0,trust:0,suspect:0,power:0}],minRound:2,maxRound:17},
+    { id:'eunuch_02',type:'eunuch',title:'家乡来信',icon:'✉️',desc:'宫中一位管事内侍托人找到你，说他家乡遭了水灾，家人来信求助。他知道你在当地有旧识任知府，想请你去封信关照一二。那内侍在宫里当差，消息灵通，若能结下这份人情，日后在宫中或许多条路。',choices:[{label:'修书一封，代为关照',effectDesc:'内侍好感+8，猜忌+1',favor:8,trust:0,suspect:1,power:0},{label:'婉拒，说地方事务不便插手',effectDesc:'无变化',favor:0,trust:0,suspect:0,power:0}],minRound:3,maxRound:17},
+    { id:'eunuch_03',type:'eunuch',title:'御赐糕点',icon:'🍡',desc:'早朝后，一位小内侍端着一盒糕点来到你的值房，说是陛下赏赐的，每位大臣都有。但你注意到盒底压着一张字条：「今日有人弹劾大人，陛下未置可否。」小内侍低头站着，似乎在等你回应。',choices:[{label:'给他赏银，细问详情',effectDesc:'内侍好感+6，私财-150，猜忌-1',favor:6,trust:0,suspect:-1,power:1,privateWealth:-150},{label:'收下糕点，装作没看到字条',effectDesc:'无变化',favor:0,trust:0,suspect:0,power:0}],minRound:2,maxRound:16},
+    { id:'eunuch_04',type:'eunuch',title:'宫中秘闻',icon:'🔔',desc:'你在西苑候召时，一位老内侍端茶过来，借着倒茶的功夫低声道：「陛下昨夜又服了丹，身子不太舒服。今天若有人提北边军饷的事，大人最好别接话。陛下现在听不得花钱的事。」他又补了一句：「这些话出了这门，咱家可不认。」',choices:[{label:'郑重道谢，记下这份人情',effectDesc:'内侍好感+9，猜忌-1',favor:9,trust:0,suspect:-1,power:0},{label:'道谢但不放在心上',effectDesc:'内侍好感+2',favor:2,trust:0,suspect:0,power:0}],minRound:4,maxRound:16},
+    { id:'eunuch_05',type:'eunuch',title:'深夜传信',icon:'🕯️',desc:'夜半时分，你府上的后门被轻轻敲响。开门一看，是乾清宫的一个小太监，满头大汗。他递上一个蜡丸，低声说：「这是里头让送出来的。大人看了便知。」蜡丸里是一张字条，写着你朝中对手近日的行程。小太监还站在门口，似乎在等回话。',choices:[{label:'收下蜡丸，赏他银两',effectDesc:'内侍好感+7，私财-100，猜忌+2',favor:7,trust:0,suspect:2,power:1,privateWealth:-100},{label:'收下蜡丸但不给赏，让他走',effectDesc:'内侍好感+2',favor:2,trust:0,suspect:0,power:0}],minRound:3,maxRound:17},
+    { id:'eunuch_06',type:'eunuch',title:'求字之交',icon:'🖌️',desc:'司礼监一位秉笔太监托人传话，说久仰你的书法，想请你题一幅字送人。这在宫中是常有之事——但对方是司礼监的人，你的字若落到有心人手里，难免被拿来做文章。不过，司礼监的人情，分量可不轻。',choices:[{label:'欣然题字，附赠一方好砚',effectDesc:'内侍好感+10，私财-300，猜忌+3',favor:10,trust:-2,suspect:3,power:1,privateWealth:-300},{label:'婉拒，说手腕不适不便题字',effectDesc:'无变化',favor:0,trust:0,suspect:0,power:0}],minRound:3,maxRound:16},
+    { id:'eunuch_07',type:'eunuch',title:'药膳风波',icon:'🍲',desc:'御药房出了事——一锅给陛下熬的药膳被人动了手脚，负责看火的小内侍被怀疑是内鬼，已被绑了起来。那小内侍的师父找到你，说这孩子一向老实，定是被人冤枉的。他知道你与太医院的人相熟，求你帮忙查一查，还这孩子一个清白。',choices:[{label:'答应帮忙查清真相',effectDesc:'内侍好感+12，猜忌+4，权力+3',favor:12,trust:0,suspect:4,power:3},{label:'不肯插手宫闱之事',effectDesc:'信任+2',favor:0,trust:2,suspect:0,power:0}],minRound:5,maxRound:16},
+    { id:'eunuch_08',type:'eunuch',title:'东厂耳目',icon:'🦻',desc:'散朝后，一个在东厂当值的内侍在廊下与你擦肩而过，迅速塞了一张字条到你袖中。上面写着：「有人重金收买大人府上的下人，已盯了半月有余。大人近日说话行事，多加小心。」字条背面还有一行小字：「看完即焚。」',choices:[{label:'追上去郑重道谢',effectDesc:'内侍好感+8，猜忌-2',favor:8,trust:0,suspect:-2,power:0},{label:'看完烧掉，不作回应',effectDesc:'内侍好感+2',favor:2,trust:0,suspect:0,power:0}],minRound:2,maxRound:17},
+    { id:'eunuch_09',type:'eunuch',title:'采买回扣',icon:'💰',desc:'宫中负责采买的内侍私下找到你，说宫里的丝绸和瓷器向来是从江南几个固定商户采购的。但最近你的差事恰好管着这一块，他暗示：若能继续沿用旧商户，商户那边每年可以给你「返一成」。他笑呵呵地说：「宫里宫外，都是这个规矩，大人不必担心。」',choices:[{label:'默许旧例，拿这份回扣',effectDesc:'内侍好感+8，内帑+500，猜忌+5',favor:8,trust:-2,suspect:5,power:1,treasury:500},{label:'拒绝，重新核价招标',effectDesc:'信任+3，内侍好感-5',favor:-5,trust:3,suspect:0,power:2}],minRound:4,maxRound:16},
+    { id:'eunuch_10',type:'eunuch',title:'万寿节筹备',icon:'🎋',desc:'嘉靖的万寿节快到了，内廷需要置办大批贡品。负责此事的太监请你帮忙——想从你管辖的采买渠道中优先调配一批上等香料和玉石，价格按市价结算。这差事若办好了，内廷上下都念你的好；但调配中若出了岔子，你也脱不了干系。',choices:[{label:'全力配合，优先调配物资',effectDesc:'内侍好感+11，权力+3，猜忌+2',favor:11,trust:0,suspect:2,power:3},{label:'公事公办，按流程来',effectDesc:'无变化',favor:0,trust:0,suspect:0,power:0}],minRound:5,maxRound:17}
+  ];
+
+  function getAvailableEvents() { return randomEvents.filter(ev => state.round>=ev.minRound && state.round<=ev.maxRound && !state.recentEvents.includes(ev.id)); }
+
+  function showRandomEvent(eventData) {
+    return new Promise((resolve) => {
+      state.recentEvents.push(eventData.id); if (state.recentEvents.length>8) state.recentEvents.shift();
+      const overlay=document.createElement('div');overlay.id='event-overlay';
+      const popup=document.createElement('div');popup.id='event-popup';popup.className=eventData.type==='guard'?'guard-event':'eunuch-event';
+      let h=''; eventData.choices.forEach((c,i)=>{const cls=i===0?'choice-help':'choice-pass';const p=i===0?'🤝 ':'🚪 ';h+=`<button class="event-choice-btn ${cls}" data-choice="${i}">${p}${c.label}</button>`;});
+      popup.innerHTML=`<div id="event-icon">${eventData.icon}</div><div id="event-title">${eventData.title}</div><div id="event-desc">${eventData.desc}</div><div id="event-choices">${h}</div><div id="event-effect-hint">— 此事件不影响当前回合选项 —</div>`;
+      overlay.appendChild(popup);document.body.appendChild(overlay);
+      popup.querySelectorAll('.event-choice-btn').forEach(btn=>{btn.onclick=()=>{const c=eventData.choices[parseInt(btn.getAttribute('data-choice'))];if(c.favor!==undefined&&c.favor!==0){if(eventData.type==='guard'){state.guardFavor+=c.favor;state.guardFavor=Math.max(0,Math.min(100,state.guardFavor));}else{state.eunuchFavor+=c.favor;state.eunuchFavor=Math.max(0,Math.min(100,state.eunuchFavor));}}applyEventEffects(c);popup.querySelectorAll('.event-choice-btn').forEach(b=>b.disabled=true);updateStats();overlay.style.opacity='0';overlay.style.transition='opacity 0.25s';setTimeout(()=>{overlay.remove();resolve();},250);};});
+      popup.addEventListener('click',e=>e.stopPropagation());
+    });
+  }
+
+  // ===== 回合数据 =====
+  const rounds = [
+    { text:'你通过会试后，被引至西苑平台召对。帘后坐着当今皇帝，你跪在蒲团上，不敢抬头。', float:'朕看过你的卷子，有些意思。朕问你——朕修道，外间议论颇多，你如何看？',
+      options:[
+        {label:'陛下修道养身，原是圣人之道。但陛下身负社稷，若因修道而荒废朝政，恐非社稷之福。',trust:2,suspect:5,power:1,tag:'A'},
+        {label:'陛下修道与治国，本不相悖。陛下圣明天纵，自能兼而顾之。臣愚见，陛下若能在修道之余稍加留意吏治，则天下幸甚。',trust:5,suspect:2,power:2,tag:'B'},
+        {label:'臣愚钝，不敢妄议圣意。陛下修道，自有天意垂象，非臣等凡夫所能窥测。臣唯愿陛下圣寿无疆。',trust:8,suspect:-1,power:0,tag:'C'},
+        {label:'（献祥瑞）陛下，臣前日偶得一石，形天然若寿桃，不敢自专，特献于陛下。',trust:10,suspect:3,power:0,treasury:200,eunuch:5,tribute:200,hidden:true,needEunuch:30,tag:'H'}
+      ]},
+    { text:'你第一次召对后没几天，便有御史弹劾你"谄媚事君，结交内侍"。嘉靖把奏折扔到你面前，让你自己看。', float:'有人告你，说你巴结朕身边的人。你自己看看，有没有这回事？',
+      options:[
+        {label:'臣问心无愧。陛下若信御史之言，臣无话可说。',trust:-5,suspect:5,power:-2,tag:'A'},
+        {label:'陛下，臣冤枉。臣所做一切，皆是为陛下分忧。御史所言，乃攻讦之辞，陛下明察。',trust:2,suspect:3,power:1,tag:'B'},
+        {label:'臣有罪。臣不该未经陛下允许，便自作主张。臣愿领罚，只求陛下保重龙体。',trust:5,suspect:-2,power:-1,tag:'C'},
+        {label:'（请罪自陈）陛下，臣愿将近日所有往来书信呈交陛下御览，以证清白。',trust:3,suspect:-8,power:-3,suspectDown:true,tag:'S'},
+        {label:'（反告）陛下，臣有下情回禀。弹劾臣的御史，是因为臣前日查办了他的门生侵占田产一案。这是案卷。',trust:8,suspect:1,power:5,guard:3,hidden:true,needGuard:40,tag:'H'}
+      ]},
+    { text:'早朝上，有人提出要清查宫室修缮的账目，矛头直指负责此事的人。你站在队列中，感受到四周投来的目光。', float:'又是查账。你们除了查账，还会什么？修了两年，查了两年，朕的宫殿还是没修好。',
+      options:[
+        {label:'陛下，账目若不清，工程必受拖累。臣愿协助清查。',trust:-3,suspect:5,power:3,tag:'A'},
+        {label:'陛下，臣以为账目该查，但工程也不能停。不如分两步走，两不相误。',trust:2,suspect:2,power:2,tag:'B'},
+        {label:'陛下，臣以为物料采买乃是多年惯例，市价时有浮动，或许另有缘由。不如让经办者自陈。',trust:5,suspect:-1,power:1,tag:'C'},
+        {label:'（转话题）陛下，臣倒是听闻，龙虎山张真人近日炼得一炉好丹，或可助陛下圣寿。',trust:8,suspect:3,power:0,eunuch:5,hidden:true,needEunuch:40,tag:'H'}
+      ]},
+    { text:'散朝后，你被内侍领到西苑一间值房。嘉靖屏退左右，只留你一人。他靠在软榻上，手里拿着一枚玉如意，随意地问你。', float:'朕听说，有人给你递了话，也有人给你递了帖子。你说说，他们谁更忠？',
+      options:[
+        {label:'陛下，臣以为忠与不忠，不在言语，在行事。陛下圣明，自能辨之。',trust:3,suspect:5,power:2,tag:'A'},
+        {label:'陛下，臣与他们都无深交，不敢妄评。但臣观其行事，一者以顺为上，一者以理为先。如何取用，在陛下圣裁。',trust:5,suspect:3,power:3,tag:'B'},
+        {label:'臣不敢妄议。臣只知道，臣是陛下的臣子，陛下让臣往东，臣绝不往西。',trust:8,suspect:-2,power:1,tag:'C'},
+        {label:'（密报）陛下，臣昨日偶然得知一事——有人昨夜去了另一位大人家中，待了半个时辰才走。',trust:10,suspect:5,power:5,guard:3,hidden:true,needGuard:50,tag:'H'}
+      ]},
+    { text:'你被派到外省核查一笔账目，历时一月，回到北京。进城后先到内阁缴了差，然后到西苑候见。嘉靖在万寿宫召见你。', float:'外省的账，查得怎么样了？',
+      options:[
+        {label:'臣据实以奏，不敢隐瞒。账目与实价确有出入，臣已将详细账目呈交内阁。',trust:3,suspect:5,power:3,tag:'A'},
+        {label:'臣已核平账目，但有几点建议，请陛下圣裁。若将采买之权收归中央，统一核价，或可避免中间盘剥。',trust:5,suspect:3,power:5,tag:'B'},
+        {label:'臣查得虽有加价，但皆因路途遥远，运耗颇大。所增有限，并非贪墨。臣已将账目核平。',trust:8,suspect:-1,power:1,tag:'C'},
+        {label:'（献宝）陛下，臣在外省还寻得一件宝物，不敢自专，特献于陛下。',trust:10,suspect:5,treasury:2000,eunuch:5,tribute:2000,hidden:true,needEunuch:40,tag:'H'}
+      ]},
+    { text:'回京后没几天，工部出了一桩缺——一个掌管宫室修缮的实权职位。廷推时两派争执不下，嘉靖听得烦了，忽然点了你的名。', float:'就让你去吧。反正宫里的差事，你也熟了。',
+      options:[
+        {label:'陛下，臣资历尚浅，不敢担此重任。请陛下另选贤能。',trust:2,suspect:-3,power:-2,tag:'A'},
+        {label:'陛下厚爱，臣不敢辞。但臣有一请：臣需调阅近年所有档案，并请陛下准臣直接向西苑奏事。',trust:5,suspect:5,power:8,tag:'B'},
+        {label:'臣谢陛下信重。臣定当竭尽全力，为陛下管好差事。',trust:8,suspect:1,power:5,tag:'C'},
+        {label:'（辞让）陛下，臣愿以副职身份协办此差，正职还请陛下另择贤能。如此既不负圣恩，也免人口舌。',trust:4,suspect:-6,power:3,suspectDown:true,tag:'S'},
+        {label:'（求手诏）陛下，臣不敢辞。但臣听闻前任是因账目不清被罢官的。请陛下赐臣一道手诏，准臣便宜行事。',trust:10,suspect:8,power:10,guard:5,hidden:true,needGuard:50,tag:'H'}
+      ]},
+    { text:'你上任不到十天，宫中一处重要的殿阁发生火灾。火势虽被扑灭，但嘉靖多年积攒的丹药和宝物被烧毁不少。你被连夜召到西苑。', float:'朕刚把差事交给你，你就给朕烧了！你说，这是怎么回事？',
+      options:[
+        {label:'臣失职，无话可说。请陛下治臣之罪。',trust:-10,suspect:5,power:-5,tag:'A'},
+        {label:'陛下，火灾因工匠夜间用火不慎而起。臣已拟了新的防火章程，请陛下过目。',trust:3,suspect:3,power:5,tag:'B'},
+        {label:'臣万死。臣愿捐出一年俸禄重修殿阁，并亲自监工，求陛下给臣一个将功补过的机会。',trust:5,suspect:-2,power:-2,treasury:200,tribute:200,tag:'C'},
+        {label:'（推责）陛下，臣查得当夜值班的工匠，是宫中另一派人举荐的。臣怀疑有人故意纵火。',trust:8,suspect:10,power:5,eunuch:10,hidden:true,needEunuch:60,tag:'H'}
+      ]},
+    { text:'火灾之后，你没有被撤职，反而被委以全权负责修复工程。一日下朝，一位老臣在午门外等你，邀你同乘。在轿中，他开门见山地想拉你入伙。', float:'听说有人找你了。朕倒想听听，是怎么回的。',
+      options:[
+        {label:'下官才疏学浅，不敢攀附。下官只想踏踏实实替陛下办差。',trust:3,suspect:-1,power:-2,tag:'A'},
+        {label:'阁老厚爱，下官感激不尽。只是下官初掌差事，事务繁杂，恐无暇他顾。待事毕，定当登门拜谢。',trust:2,suspect:2,power:3,tag:'B'},
+        {label:'阁老如此厚爱，下官若再推辞，便是不识抬举了。今后还望阁老多多指点。',trust:5,suspect:3,power:8,faction:3,tag:'C'},
+        {label:'（挑拨）阁老好意，下官心领。不过下官听说，另有一位大人最近也在广纳门客。下官愚钝，不知该投哪一边。',trust:5,suspect:8,power:5,hidden:true,needFavor:15,tag:'H'}
+      ]},
+    { text:'拉拢之事没过几天，另一位大臣也派人送了密信，约你在城外茶楼见面。你如约而至，对方包下了整层楼，为你斟茶，然后缓缓开口。', float:'又有人找你了。这回来的是哪边的？',
+      options:[
+        {label:'下官以为，朝堂之上，谁又比谁干净呢？下官只想替陛下办差，不想卷入党争。',trust:3,suspect:3,power:1,tag:'A'},
+        {label:'大人所言，下官也有所耳闻。但对方柄政多年，根深蒂固，大人可有万全之策？',trust:3,suspect:5,power:5,tag:'B'},
+        {label:'下官不敢妄议。陛下信他，自有陛下的道理。大人若无事，下官告退了。',trust:5,suspect:2,power:2,tag:'C'},
+        {label:'（献情报）大人，下官有一事相告。昨日那边府上，来了一位身份可疑的客人。',trust:10,suspect:10,power:8,hidden:true,needEunuch:50,tag:'H'}
+      ]},
+    { text:'嘉靖连日服丹，身体不适，罢朝三日。宫中传言纷纷，有人说皇帝可能熬不过这个冬天。你站在西苑门外候旨，心里盘算着该如何应对。', float:'朕这几日身子不爽，外头有什么动静？',
+      options:[
+        {label:'陛下龙体欠安，臣以为当以社稷为重。请陛下早定国本，以安人心。',trust:-5,suspect:10,power:3,tag:'A'},
+        {label:'陛下安心养病，朝中事务自有阁臣处置。臣等唯愿陛下早日康复。',trust:3,suspect:2,power:2,tag:'B'},
+        {label:'陛下，臣已为陛下寻得一位高人，或可入宫为陛下诊治。',trust:8,suspect:1,power:1,tag:'C'},
+        {label:'（自证）陛下，臣近日得了一本古籍医方，或可调理龙体。臣愿呈于太医院核验后试用。',trust:6,suspect:-5,power:1,privateWealth:-300,suspectDown:true,tag:'S'},
+        {label:'（密报）陛下，臣听闻有人已在暗中联络，准备在陛下龙体欠安期间有所动作。这是名单。',trust:10,suspect:10,power:10,guard:5,hidden:true,needGuard:60,tag:'H'}
+      ]},
+    { text:'你之前通过内侍献过丹药。如今那炉丹药被查出含有丹毒，服用后有人出了事。嘉靖把你叫到跟前，把那封弹劾你的奏折扔到你面前。', float:'这是你献的丹。你自己看看，吃死了人。你说，朕该怎么处置你？',
+      options:[
+        {label:'臣有罪。臣不该轻信方士之言，以致酿成大祸。请陛下治臣之罪。',trust:-8,suspect:5,power:-5,tag:'A'},
+        {label:'陛下，臣也是被人蒙蔽。那方士自称是龙虎山高人，臣一时不察。请陛下容臣戴罪立功。',trust:2,suspect:5,power:3,tag:'B'},
+        {label:'陛下，臣冤枉。臣献丹时曾请内侍查验，是内侍说无碍，臣才敢献上的。',trust:5,suspect:3,power:1,eunuch:-10,tag:'C'},
+        {label:'（反咬）陛下，臣有下情回禀。那丹药虽是臣献的，但方子是另一个人给的。臣怀疑有人想借臣的手加害陛下。',trust:8,suspect:10,power:5,eunuch:5,hidden:true,needEunuch:50,tag:'H'}
+      ]},
+    { text:'北边传来急报，鞑靼犯边，需要紧急调拨军饷。但国库空虚，户部拿不出钱来。嘉靖把几个大臣叫到西苑，问大家有什么办法。', float:'北边要钱，国库没钱。你们说，怎么办？',
+      options:[
+        {label:'陛下，臣以为当加征商税，以充军饷。国难当头，商人亦当出力。',trust:2,suspect:5,power:5,tag:'A'},
+        {label:'陛下，臣以为当裁减宫中用度，省出银子来充作军饷。非常之时，当行非常之举。',trust:3,suspect:3,power:3,tag:'B'},
+        {label:'陛下，臣以为可暂借内帑，待秋粮入库后再行归还。陛下以社稷为重，臣等感佩。',trust:8,suspect:2,power:1,tag:'C'},
+        {label:'（献私财）陛下，臣愿献出家中积蓄，以充军饷。国难当头，臣不敢自安。',trust:15,suspect:5,power:5,treasury:800,privateWealth:-800,tribute:800,hidden:true,needPrivateWealth:1500,tag:'H'}
+      ]},
+    { text:'你在朝中渐渐站稳了脚跟，但也引来了更多的攻击。一日之间，你收到了三封弹劾你的奏章副本——有人告你贪墨，有人告你结党，有人告你媚上。', float:'一天之内，三个人告你。你说说，你是得罪了什么人，还是真干了这些事？',
+      options:[
+        {label:'陛下，臣问心无愧。若陛下信不过臣，臣愿辞官归乡，以证清白。',trust:-5,suspect:5,power:-5,tag:'A'},
+        {label:'陛下，这是有人想借陛下之手除掉臣。臣请陛下给臣三日时间，臣定将证据呈上。',trust:3,suspect:5,power:5,tag:'B'},
+        {label:'陛下，臣有罪。臣不该行事张扬，惹人嫉恨。臣愿闭门思过，求陛下息怒。',trust:5,suspect:-2,power:-2,tag:'C'},
+        {label:'（退让）陛下，臣愿辞去采买之职，交出所有账册，请有司核查。若查出分毫贪墨，臣甘受重罚。',trust:7,suspect:-8,power:-5,suspectDown:true,tag:'S'},
+        {label:'（反制）陛下，弹劾臣的三人，昨夜曾在同一处饮宴。这是名单。',trust:10,suspect:8,power:8,guard:5,hidden:true,needGuard:60,tag:'H'}
+      ]},
+    { text:'你一直倚仗的那位内侍，因卷入一场宫闱争斗，被嘉靖贬去南京守陵。临走前，他托人给你带了一封信，信上只有四个字："小心自保。"', float:'听说你和那个被贬的人走得很近？朕劝你一句——宫里的人，靠不住。',
+      options:[
+        {label:'陛下教训的是。臣今后定当谨言慎行，不交内侍。',trust:3,suspect:-2,power:-2,eunuch:-10,tag:'A'},
+        {label:'陛下，臣与他只是公务往来，并无私交。他既被贬，臣不敢再与他来往。',trust:5,suspect:2,power:1,eunuch:-5,tag:'B'},
+        {label:'陛下明鉴。臣与他确有些交情，但他从未向臣透露过宫中之事。臣知罪。',trust:8,suspect:5,power:3,eunuch:5,tag:'C'},
+        {label:'（遗言）陛下，他在临走前托人告诉臣一件事——他说，有人在陛下面前说了臣的坏话，让臣小心。',trust:10,suspect:10,power:5,eunuch:10,hidden:true,needEunuch:70,tag:'H'}
+      ]},
+    { text:'一日深夜，你府上来了一位不速之客——锦衣卫的一位千户。他穿着便服，说是"路过"，但坐下来之后，话里话外都在打听你最近在忙什么。', float:'昨晚睡得好吗？朕听说，有人去你府上串门了。',
+      options:[
+        {label:'陛下，臣昨夜确实有客来访。臣问心无愧，陛下若想查，臣愿交出所有书信账目。',trust:3,suspect:5,power:-2,tag:'A'},
+        {label:'陛下，昨夜来的是一位朋友，与臣谈论了一些地方上的见闻。陛下若想知道详情，臣可以一一禀报。',trust:5,suspect:3,power:3,tag:'B'},
+        {label:'陛下，昨夜确实有人来。但臣与他只是泛泛之交，说了几句闲话便散了。',trust:8,suspect:2,power:1,tag:'C'},
+        {label:'（请罪）陛下，臣知错了。昨夜来客臣未及时禀报，是臣疏忽。臣愿自罚俸三月，并请陛下派人核查臣近日一切往来。',trust:6,suspect:-7,power:-3,treasury:300,tribute:300,suspectDown:true,tag:'S'},
+        {label:'（交底）陛下，昨夜来的那位千户，是臣的朋友。他提醒臣，有人在陛下面前构陷臣。',trust:15,suspect:5,power:5,guard:5,hidden:true,needGuard:70,tag:'H'}
+      ]},
+    { text:'朝中风向突变。你一直依附的那位老臣，被言官集体弹劾，嘉靖连下三道旨意，削了他的官职，命他回籍听勘。你知道，你的靠山要倒了。', float:'你那位老上司，出事了。你怎么看？',
+      options:[
+        {label:'陛下，臣以为他罪有应得。臣与他早已划清界限，请陛下明察。',trust:3,suspect:5,power:3,tag:'A'},
+        {label:'陛下，臣不敢妄议。他于臣有提携之恩，但臣不敢因私废公。陛下如何处置，臣都无话可说。',trust:5,suspect:3,power:2,tag:'B'},
+        {label:'陛下，臣愿为他求情。他虽有错，但于国于民亦有功劳。求陛下念在他多年辛苦的份上，从轻发落。',trust:-5,suspect:5,power:-5,tag:'C'},
+        {label:'（同罪）陛下，臣愿与他同罪。他若被贬，臣愿辞官，与他一同回乡。',trust:-15,suspect:10,power:-10,hidden:true,needFavor:25,tag:'H'}
+      ]},
+    { text:'老臣倒台后，当初策反你的那位大臣顺利上位，成了新的首辅。他上任第一天，就把你叫到他的值房，关上门，和你谈了一个时辰。', float:'听说昨天新首辅找你谈话了。谈得怎么样？朕看你今天气色不错。',
+      options:[
+        {label:'陛下，首辅大人与臣谈了一些地方上的事务。臣以为，首辅大人是想整顿吏治，臣愿全力配合。',trust:3,suspect:5,power:5,tag:'A'},
+        {label:'陛下，首辅大人问了一些关于前任老臣的事。臣据实以答，不敢隐瞒。',trust:5,suspect:3,power:3,tag:'B'},
+        {label:'陛下，首辅大人只是与臣闲聊了几句，并未谈及正事。臣愚钝，不知首辅大人何意。',trust:8,suspect:2,power:1,tag:'C'},
+        {label:'（改革提议）陛下，首辅大人与臣谈了一件大事——他说，陛下有意改革税制，问臣愿不愿参与。',trust:10,suspect:10,power:10,hidden:true,needFavor:25,tag:'H'}
+      ]},
+    { text:'你在朝中沉浮多年，终于走到了最后一步。嘉靖在西苑召见你，这一次，没有帘子，没有内侍，只有你们两个人。他坐在蒲团上，面前摆着一壶茶，两个杯子。', float:'这么多年了，朕看着你一步步走到今天。朕问你一句话——你做的这些事，是为了朕，还是为了你自己？',
+      options:[
+        {label:'陛下，臣所做的一切，皆是为了社稷。若陛下认为臣有私心，臣无话可说。',trust:-10,suspect:10,power:-5,tag:'A'},
+        {label:'陛下，臣不敢说全无私心。但臣所做的一切，皆是以陛下为先。臣愿为陛下赴汤蹈火。',trust:5,suspect:5,power:5,tag:'B'},
+        {label:'陛下，臣所做的一切，都是为了陛下。臣不敢有私心，也不敢有异志。臣只想做陛下手里的一把刀。',trust:10,suspect:2,power:3,tag:'C'},
+        {label:'（掀桌子）陛下，臣所做的一切，确实是为了陛下。但臣也想做一件为了天下的事——请陛下允许臣，改革税制，还利于民。',trust:0,suspect:0,power:0,hidden:true,needTrust:90,needSuspect:35,needPower:80,tag:'H'}
+      ]},
+    { text:'召对之后，你回到家中，等待最终的旨意。三日后，圣旨到了。', float:'朕记得你第一次见朕的时候，跪在那里，头都不敢抬。那时候朕就在想，这个人，能走多远？现在朕知道了。去吧。', options:[] },
+    { text:'', float:'', options:[] }
+  ];
+
+  let currentRoundIndex = 0;
+
+  function canShowHidden(opt) {
+    if (opt.needEunuch !== undefined && state.eunuchFavor < opt.needEunuch) return false;
+    if (opt.needGuard !== undefined && state.guardFavor < opt.needGuard) return false;
+    if (opt.needFavor !== undefined && state.faction < opt.needFavor) return false;
+    if (opt.needTreasury !== undefined && state.treasury < opt.needTreasury) return false;
+    if (opt.needPrivateWealth !== undefined && state.privateWealth < opt.needPrivateWealth) return false;
+    if (opt.needTrust !== undefined && state.trust < opt.needTrust) return false;
+    if (opt.needSuspect !== undefined && state.suspect > opt.needSuspect) return false;
+    if (opt.needPower !== undefined && state.power < opt.needPower) return false;
+    return true;
+  }
+
+  async function applyOption(opt) {
+    if (opt.trust !== undefined) state.trust += opt.trust;
+    if (opt.suspect !== undefined) state.suspect += opt.suspect;
+    if (opt.power !== undefined) state.power += opt.power;
+    if (opt.faction !== undefined) state.faction += opt.faction;
+    if (opt.treasury !== undefined) state.treasury += opt.treasury;
+    if (opt.privateWealth !== undefined) state.privateWealth += opt.privateWealth;
+    if (opt.tribute !== undefined) state.totalTribute += opt.tribute;
+    if (opt.eunuch !== undefined) state.eunuchFavor += opt.eunuch;
+    if (opt.guard !== undefined) state.guardFavor += opt.guard;
+    if (opt.tag === 'A') state.countA++;
+    if (opt.tag === 'B') state.countB++;
+    if (opt.tag === 'C') state.countC++;
+    if (opt.tag === 'H') state.countHidden++;
+    if (opt.tag === 'S') state.countC++;
+    if (opt.tag === 'H' && opt.needTrust) state.triggeredReform = true;
+    clampStats();
+    const triggered = checkTributeThresholds();
+    if (triggered.length > 0) { updateStats(); await showTributePopup(triggered); }
+  }
+
+  function renderRound() {
+    const rd = rounds[currentRoundIndex];
+    roundEl.textContent = state.round;
+    mainText.textContent = rd.text;
+    floatScreen.textContent = rd.float;
+    optionsArea.innerHTML = '';
+    if (rd.options.length === 0) { setTimeout(() => nextRound(), 1200); return; }
+    rd.options.forEach(opt => {
+      const btn = document.createElement('button'); btn.className = 'option-btn';
+      if (opt.hidden) btn.classList.add('hidden-flag');
+      if (opt.suspectDown) btn.classList.add('suspect-down');
+      btn.textContent = opt.label;
+      if (opt.hidden && !canShowHidden(opt)) btn.disabled = true;
+      btn.onclick = async () => {
+        if (opt.suspect !== undefined && opt.suspect < 0 && state.underInvestigation) {
+          const tempOpt = { ...opt, suspect: Math.ceil(opt.suspect / 2) };
+          await applyOption(tempOpt);
+        } else { await applyOption(opt); }
+        updateStats(); nextRound();
+      };
+      optionsArea.appendChild(btn);
+    });
+  }
+
+  async function nextRound() {
+    currentRoundIndex++; state.round++;
+    if (currentRoundIndex >= rounds.length) { renderEnding(); return; }
+    if (checkInvestigation()) await showInvestigationPopup();
+    const relation = getTrustSuspectRelation();
+    if (relation && !state.relationEventsFired[relation]) await showRelationEvent(relation);
+    if (state.round >= 2 && state.round <= 17 && !state.gameOver) {
+      if (Math.random() < 0.40) { const avail = getAvailableEvents(); if (avail.length) await showRandomEvent(avail[Math.floor(Math.random()*avail.length)]); }
+      if (Math.random() < 0.80) { const availE = getAvailableEmbezzleEvents(); if (availE.length) await showEmbezzleEvent(availE[Math.floor(Math.random()*availE.length)]); }
+    }
+    if (state.suspect >= 75 && state.round >= 8 && state.round <= 16 && !state.gameOver && !state.relationEventsFired['dangerWarning']) {
+      state.relationEventsFired['dangerWarning'] = true; await showDangerWarning();
+    }
+    renderRound();
+  }
+
+  function renderEnding() {
+    state.gameOver = true; optionsArea.innerHTML = '';
+    let endingText='', floatText='';
+    if (state.suspect > 85 && state.trust < 60) {
+      endingText="你终究没能挽回嘉靖的猜忌。一道圣旨，锦衣卫围了你的府邸。家产抄没，你被下狱论罪。嘉靖在圣旨上批了四个字——「深负朕恩」。【结局：圣心尽失】";
+      floatText="朕给过你机会，你却没把握住。";
+    } else if (state.suspect > 85 && state.trust >= 60) {
+      endingText="嘉靖虽未降罪于你，但从那以后再也没有召见过你。你的官职被架空，实权被收回，每日只能在值房里喝茶打发时日。朝中无人敢与你往来，你成了西苑里最孤独的人。【结局：闲置废员】";
+      floatText="你心思太深，朕不敢再用。";
+    } else if (state.triggeredReform && state.trust >= 70 && state.power >= 70) {
+      endingText="你以孤臣之身，顶住朝野压力推行税制改革，嘉靖虽心中猜忌，却认可你的治国之才。数十年后，天下赋税清平，史书留你直臣之名。【结局：济世孤臣】";
+      floatText="朕知你心中装着天下，朕容你放手去做。";
+    } else if (state.power >= 75 && state.trust >= 60 && state.suspect <= 40) {
+      endingText="你深得帝心，手握宫禁工程、财用大权，朝堂无人能与你抗衡，成为嘉靖一朝举足轻重的近臣。【结局：西苑近辅】";
+      floatText="朝中诸事，多交由你处置，朕放心。";
+    } else if (state.faction >= 18 && state.power >= 60) {
+      endingText="你暗中收拢大批朝臣，自成一党，内阁六部皆有你的门生，朝堂形成新的派系格局。【结局：朝堂魁首】";
+      floatText="朝中大半人，都听你号令了吧。";
+    } else if (state.trust >= 70) {
+      endingText="你一生谨小慎微，从不违逆圣意，嘉靖始终信你，但无实权无功业，安稳终老西苑。【结局：顺旨文臣】";
+      floatText="你最懂朕心思，留你在身边甚好。";
+    } else if (state.suspect >= 70) {
+      endingText="皇帝心中对你疑心深重，虽未降罪，但再不重用，闲置府邸，终身不得召对。【结局：闲置废员】";
+      floatText="你心思太深，朕不敢再用。";
+    } else if (state.trust <= 20) {
+      endingText="嘉靖对你积怨已久，一道圣旨将你下狱，家产抄没，累及族人。【结局：身败名裂】";
+      floatText="你屡次忤逆朕意，留你何用。";
+    } else {
+      endingText="你沉浮朝堂二十载，不上不下，无大功亦无大过，致仕还乡，平淡过完余生。【结局：寻常仕路】";
+      floatText="无功无过，归乡安度余年吧。";
+    }
+    mainText.textContent = endingText; floatScreen.textContent = floatText; roundEl.textContent = "终章";
+  }
+
+  updateStats(); renderRound();
+})();
+</script>
+</body>
+</html>
